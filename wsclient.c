@@ -340,6 +340,7 @@ void *libwsclient_handshake_thread(void *ptr)
 
 	if (TEST_FLAG(client, FLAG_CLIENT_IS_SSL))
 	{
+    #ifdef HAVE_OPENSSL
 		static bool b_ssl_need_inited = true;
 		if (b_ssl_need_inited)
 		{ // openssl 版本号小于等于 1.0.2 时，需要加入这个初始化；大于 1.1.0 则无需调用，自动完成。
@@ -351,6 +352,10 @@ void *libwsclient_handshake_thread(void *ptr)
 		client->ssl = SSL_new(client->ssl_ctx);
 		SSL_set_fd(client->ssl, sockfd);
 		SSL_connect(client->ssl);
+    #else
+    LIBWSCLIENT_ON_ERROR(client, "Error while setting ssl");
+    return NULL;
+    #endif
 	}
 
 	pthread_mutex_lock(&client->lock);
@@ -461,9 +466,9 @@ void *libwsclient_handshake_thread(void *ptr)
 		LIBWSCLIENT_ON_ERROR(client, "Remote web server did not respond with expcet ( update, accept, connection) header during handshake");
 		return NULL;
 	}
-#ifdef DEBUG
+  #ifdef DEBUG
 	// LIBWSCLIENT_ON_INFO(client, "websocket握手完成.\n");
-#endif
+  #endif
 	update_wsclient_status(client, 0, FLAG_CLIENT_CONNECTING);
 
 	if (client->onopen != NULL)
@@ -493,9 +498,9 @@ size_t _libwsclient_read(wsclient *c, void *buf, size_t length)
 	size_t n = 0;
   ssize_t ret = -1;
   char * p = buf;
-#ifdef DEBUG
+  #ifdef DEBUG
 	char* sp = "";
-#endif
+  #endif
   for (; n < length; n++) {
     if (c->buf.pos == 0 || c->buf.pos == c->buf.len)
     {
@@ -504,7 +509,9 @@ size_t _libwsclient_read(wsclient *c, void *buf, size_t length)
         #ifdef DEBUG
         sp = "ssl";
         #endif
+        #ifdef HAVE_OPENSSL
         ret = (ssize_t)SSL_read(c->ssl, (unsigned char *)c->buf.data, sizeof(c->buf.data));
+        #endif
       }
       else
       {
@@ -519,12 +526,12 @@ size_t _libwsclient_read(wsclient *c, void *buf, size_t length)
     }
     *(p++) = c->buf.data[c->buf.pos++];
 	}
-#ifdef DEBUG
+  #ifdef DEBUG
 	char buff[256] = {0};
 	sprintf(buff, "wsclient %s read %ld bytes.",sp, n);
 	LIBWSCLIENT_ON_INFO(c, buff);
 	c->onmessage(c, 0, n, buf);
-#endif
+  #endif
 	return n;
 }
 
@@ -532,15 +539,17 @@ size_t _libwsclient_write(wsclient *c, const void *buf, size_t length)
 {
 	pthread_mutex_lock(&c->send_lock);
 	ssize_t len = 0;
-#ifdef DEBUG
+  #ifdef DEBUG
 	char* sp = "";
-#endif
+  #endif
 	if (TEST_FLAG(c, FLAG_CLIENT_IS_SSL))
 	{
     #ifdef DEBUG
 		sp = "ssl";
     #endif
+    #ifdef HAVE_OPENSSL
 		len = (ssize_t) SSL_write(c->ssl, buf, length);
+    #endif
 	}
 	else
 	{
@@ -550,11 +559,11 @@ size_t _libwsclient_write(wsclient *c, const void *buf, size_t length)
 		len =  send(c->sockfd, buf, length, 0);
 	}
 	pthread_mutex_unlock(&c->send_lock);
-#ifdef DEBUG
+  #ifdef DEBUG
 	char buff[256] = {0};
 	sprintf(buff, "wsclient %s send %ld of %ld bytes.",sp, len, length);
 	LIBWSCLIENT_ON_INFO(c, buff);
-#endif
+  #endif
 	return len;
 }
 

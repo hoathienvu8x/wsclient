@@ -3,10 +3,12 @@
 
 #include <stddef.h>
 #include <stdbool.h>
-
+#ifdef HAVE_OPENSSL
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 #include <openssl/crypto.h>
+#endif
+
 #define FRAME_CHUNK_LENGTH 1024
 #define HELPER_RECV_BUF_SIZE 1024
 
@@ -62,8 +64,10 @@ typedef struct _wsclient
 	int (*onerror)(struct _wsclient *, int code, char *msg);
 	int (*onmessage)(struct _wsclient *, bool isText, unsigned long long lenth, unsigned char *data);
 	wsclient_frame_in *current_frame;
+  #ifdef HAVE_OPENSSL
 	SSL_CTX *ssl_ctx;
 	SSL *ssl;
+  #endif
 	void *userdata;
   struct stream_buff buf;
 } wsclient;

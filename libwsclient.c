@@ -110,19 +110,33 @@ void libwsclient_close(wsclient *client)
 	libwsclient_wait_for_end(client);
 	pthread_mutex_destroy(&client->lock);
 	pthread_mutex_destroy(&client->send_lock);
+  if (TEST_FLAG(client, FLAG_CLIENT_IS_SSL))
+  {
+    #ifdef HAVE_OPENSSL
+    if (client->ssl)
+    {
+      SSL_shutdown(client->ssl);
+      SSL_free(client->ssl);
+    }
+    if (client->ssl_ctx)
+    {
+      SSL_CTX_free(client->ssl_ctx);
+    }
+    #endif
+  }
 	free(client);
 }
 
 void libwsclient_send_string(wsclient *client, char *payload)
 {
-#ifdef DEBUG
+  #ifdef DEBUG
 	char buff[1024] = {0};
 	sprintf(buff, "websocket 发送数据 message: %s", payload);
 	//if (ctl_frame->payload_len > 0)
 	{
 		LIBWSCLIENT_ON_INFO(client, buff);
 	}
-#endif
+  #endif
 
 	int nlen = strlen(payload);
 	if (nlen <= 0)
