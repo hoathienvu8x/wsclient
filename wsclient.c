@@ -491,20 +491,33 @@ int stricmp(const char *s1, const char *s2)
 size_t _libwsclient_read(wsclient *c, void *buf, size_t length)
 {
 	size_t n = 0;
+  ssize_t ret = -1;
+  char * p = buf;
 #ifdef DEBUG
 	char* sp = "";
 #endif
-
-	if (TEST_FLAG(c, FLAG_CLIENT_IS_SSL))
-	{
-    #ifdef DEBUG
-		sp = "ssl";
-    #endif
-		n = (ssize_t)SSL_read(c->ssl, buf, length);
-	}
-	else
-	{
-		n = recv(c->sockfd, buf, length, 0);
+  for (; n < length; n++) {
+    if (c->buf.pos == 0 || c->buf.pos == c->buf.len)
+    {
+      if (TEST_FLAG(c, FLAG_CLIENT_IS_SSL))
+      {
+        #ifdef DEBUG
+        sp = "ssl";
+        #endif
+        ret = (ssize_t)SSL_read(c->ssl, (unsigned char *)c->buf.data, sizeof(c->buf.data));
+      }
+      else
+      {
+        ret = recv(c->sockfd, (unsigned char *)c->buf.data, sizeof(c->buf.data), 0);
+      }
+      if (ret <= 0)
+      {
+        return ret;
+      }
+      c->buf.pos = 0;
+      c->buf.len = (size_t)ret;
+    }
+    *(p++) = c->buf.data[c->buf.pos++];
 	}
 #ifdef DEBUG
 	char buff[256] = {0};

@@ -20,6 +20,11 @@
 #define FLAG_REQUEST_VALID_STATUS (1 << 2)
 #define FLAG_REQUEST_VALID_ACCEPT (1 << 3)
 
+struct stream_buff {
+  char data[HELPER_RECV_BUF_SIZE];
+  ssize_t len;
+  ssize_t pos;
+};
 
 enum _WS_OP_CODE_
 {
@@ -60,6 +65,7 @@ typedef struct _wsclient
 	SSL_CTX *ssl_ctx;
 	SSL *ssl;
 	void *userdata;
+  struct stream_buff buf;
 } wsclient;
 
 // Function defs
