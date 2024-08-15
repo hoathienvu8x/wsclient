@@ -37,7 +37,9 @@ void *libwsclient_run_thread(void *ptr)
 
   if (c->onperiodic && c->interval > 0)
   {
-    pthread_create(&c->periodic_thread, NULL, libwsclient_run_periodic, (void *)c);
+    pthread_create(
+      &c->periodic_thread, NULL, libwsclient_run_periodic, (void *)c
+    );
   }
 
   do
@@ -88,7 +90,9 @@ void *libwsclient_run_thread(void *ptr)
 
     if (z < len){
       char buff[128] = {0};
-      sprintf(buff, "wsclient try to read %lld bytes, but get %ld bytes.", len, n);
+      sprintf(
+        buff, "wsclient try to read %lld bytes, but get %ld bytes.", len, n
+      );
       LIBWSCLIENT_ON_ERROR(c, buff);
       break;
     }
@@ -133,7 +137,11 @@ void libwsclient_handle_control_frame(wsclient *c, wsclient_frame_in *ctl_frame)
     if (ctl_frame->payload_len > 0)
     {
       char buff[1024] = {0};
-      sprintf(buff, "websocket 收到控制---关闭, len: %llu; code: %x,%x; reason: %s", ctl_frame->payload_len, ctl_frame->payload[0], ctl_frame->payload[1], ctl_frame->payload + 2);
+      sprintf(
+        buff, "websocket 收到控制---关闭, len: %llu; code: %x,%x; reason: %s",
+        ctl_frame->payload_len, ctl_frame->payload[0], ctl_frame->payload[1],
+        ctl_frame->payload + 2
+      );
       LIBWSCLIENT_ON_INFO(c, buff);
     }
 #endif 
@@ -145,7 +153,9 @@ void libwsclient_handle_control_frame(wsclient *c, wsclient_frame_in *ctl_frame)
     if (!(TEST_FLAG(c, FLAG_CLIENT_CLOSEING)))
     {
       // server request close.  Send close frame as acknowledgement.
-      libwsclient_send_data(c, OP_CODE_CONTROL_CLOSE, ctl_frame->payload, ctl_frame->payload_len);
+      libwsclient_send_data(
+        c, OP_CODE_CONTROL_CLOSE, ctl_frame->payload, ctl_frame->payload_len
+      );
       update_wsclient_status(c, FLAG_CLIENT_CLOSEING, 0);
     }
     break;
@@ -157,7 +167,9 @@ void libwsclient_handle_control_frame(wsclient *c, wsclient_frame_in *ctl_frame)
 #ifdef DEBUG
     LIBWSCLIENT_ON_INFO(c, "websocket 收到控制---PING.\n");
 #endif 
-    libwsclient_send_data(c, OP_CODE_CONTROL_PONG, ctl_frame->payload, ctl_frame->payload_len);
+    libwsclient_send_data(
+      c, OP_CODE_CONTROL_PONG, ctl_frame->payload, ctl_frame->payload_len
+    );
     break;
   case OP_CODE_CONTROL_PONG:
 #ifdef DEBUG
@@ -208,7 +220,7 @@ inline void handle_on_data_frame_in(wsclient *c, wsclient_frame_in *pframe)
 
       // 按照rfc6455, 多帧只可能是数据帧，控制帧只能是单帧，且payload在126以内。
       if (c->onmessage)
-        c->onmessage(c, op & OP_CODE_TYPE_TEXT, payload_len, payload);
+        c->onmessage(c, op, payload_len, payload);
       free(payload);
     }
     else
@@ -223,7 +235,7 @@ inline void handle_on_data_frame_in(wsclient *c, wsclient_frame_in *pframe)
       {
         // 单帧消息
         if (c->onmessage)
-          c->onmessage(c, pframe->opcode & OP_CODE_TYPE_TEXT, pframe->payload_len, pframe->payload);
+          c->onmessage(c, pframe->opcode, pframe->payload_len, pframe->payload);
       }
       free(pframe->payload);
       free(pframe);
@@ -323,7 +335,11 @@ void *libwsclient_handshake_thread(void *ptr)
     update_wsclient_status(client, FLAG_CLIENT_IS_SSL, 0);
   }
   size_t z = 0;
-  for (i = p - URI_copy + 3, z = 0; *(URI_copy + i) != '/' && *(URI_copy + i) != ':' && *(URI_copy + i) != '\0'; i++, z++)
+  for (
+    i = p - URI_copy + 3, z = 0;
+    *(URI_copy + i) != '/' && *(URI_copy + i) != ':' && *(URI_copy + i) != '\0';
+    i++, z++
+  )
   {
     host[z] = *(URI_copy + i);
   }
@@ -398,7 +414,11 @@ void *libwsclient_handshake_thread(void *ptr)
     snprintf(request_host, 256, "%s", host);
   }
   char request_headers[1024] = {0};
-  snprintf(request_headers, 1024, "GET %s HTTP/1.1\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nHost: %s\r\nSec-WebSocket-Key: %s\r\nSec-WebSocket-Version: 13\r\n\r\n", path, request_host, websocket_key);
+  snprintf(
+    request_headers, 1024, "GET %s HTTP/1.1\r\nUpgrade: websocket\r\n"
+    "Connection: Upgrade\r\nHost: %s\r\nSec-WebSocket-Key: %s\r\n"
+    "Sec-WebSocket-Version: 13\r\n\r\n", path, request_host, websocket_key
+  );
   n = _libwsclient_write(client, request_headers, strlen(request_headers));
   z = 0;
   memset(recv_buf, 0, 1024);
@@ -406,7 +426,7 @@ void *libwsclient_handshake_thread(void *ptr)
   //  sends post-handshake data that gets coalesced in this recv
   do
   {
-    n = _libwsclient_read(client, recv_buf + z, 1023 - z);
+    n = _libwsclient_read(client, recv_buf + z, 1);
     z += n;
   } while ((z < 4 || strstr(recv_buf, "\r\n\r\n") == NULL) && n > 0);
 
@@ -431,7 +451,11 @@ void *libwsclient_handshake_thread(void *ptr)
   SHA1Input(&shactx, (unsigned char*)pre_encode, strlen(pre_encode));
   SHA1Result(&shactx);
   memset(pre_encode, 0, 256);
-  snprintf(pre_encode, 256, "%08x%08x%08x%08x%08x", shactx.Message_Digest[0], shactx.Message_Digest[1], shactx.Message_Digest[2], shactx.Message_Digest[3], shactx.Message_Digest[4]);
+  snprintf(
+    pre_encode, 256, "%08x%08x%08x%08x%08x", shactx.Message_Digest[0],
+    shactx.Message_Digest[1], shactx.Message_Digest[2],
+    shactx.Message_Digest[3], shactx.Message_Digest[4]
+  );
   for (z = 0; z < (strlen(pre_encode) / 2); z++)
     sscanf(pre_encode + (z * 2), "%02hhx", sha1bytes + z);
   char expected_base64[512] = {0};
@@ -445,7 +469,9 @@ void *libwsclient_handshake_thread(void *ptr)
       *p = '\0';
       if (strcmp(tok, "HTTP/1.1 101") != 0 && strcmp(tok, "HTTP/1.0 101") != 0)
       {
-        LIBWSCLIENT_ON_ERROR(client, "Remote web server responded with bad HTTP status during handshake");
+        LIBWSCLIENT_ON_ERROR(
+          client, "Remote web server responded with bad HTTP status during handshake"
+        );
         LIBWSCLIENT_ON_INFO(client, "handshake resp: \n\t");
         LIBWSCLIENT_ON_INFO(client, rcv);
 
@@ -480,9 +506,15 @@ void *libwsclient_handshake_thread(void *ptr)
       }
     }
   }
-  if (!(flags & (FLAG_REQUEST_HAS_UPGRADE | FLAG_REQUEST_HAS_CONNECTION | FLAG_REQUEST_VALID_ACCEPT)))
+  if (!(flags & (
+    FLAG_REQUEST_HAS_UPGRADE | FLAG_REQUEST_HAS_CONNECTION |
+    FLAG_REQUEST_VALID_ACCEPT
+  )))
   {
-    LIBWSCLIENT_ON_ERROR(client, "Remote web server did not respond with expcet ( update, accept, connection) header during handshake");
+    LIBWSCLIENT_ON_ERROR(
+      client, "Remote web server did not respond with expcet ( update, "
+      "accept, connection) header during handshake"
+    );
     return NULL;
   }
   #ifdef DEBUG
@@ -529,12 +561,16 @@ size_t _libwsclient_read(wsclient *c, void *buf, size_t length)
         sp = "ssl";
         #endif
         #ifdef HAVE_OPENSSL
-        ret = (ssize_t)SSL_read(c->ssl, (unsigned char *)c->buf.data, sizeof(c->buf.data));
+        ret = (ssize_t)SSL_read(
+          c->ssl, (unsigned char *)c->buf.data, sizeof(c->buf.data)
+        );
         #endif
       }
       else
       {
-        ret = recv(c->sockfd, (unsigned char *)c->buf.data, sizeof(c->buf.data), 0);
+        ret = recv(
+          c->sockfd, (unsigned char *)c->buf.data, sizeof(c->buf.data), 0
+        );
       }
       if (ret <= 0)
       {
@@ -549,7 +585,7 @@ size_t _libwsclient_read(wsclient *c, void *buf, size_t length)
   char buff[256] = {0};
   sprintf(buff, "wsclient %s read %ld bytes.",sp, n);
   LIBWSCLIENT_ON_INFO(c, buff);
-  c->onmessage(c, 0, n, buf);
+  c->onmessage(c, OP_CODE_TYPE_BINARY, n, buf);
   #endif
   return n;
 }

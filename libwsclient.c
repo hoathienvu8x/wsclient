@@ -1,4 +1,3 @@
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
@@ -25,9 +24,14 @@ wsclient *libwsclient_new(const char *URI, int as_thread)
     // LIBWSCLIENT_ON_ERROR(client, "Unable to allocate memory in libwsclient_new.\n");
     return NULL;
   }
-  if ((pthread_mutex_init(&client->lock, NULL) != 0) || (pthread_mutex_init(&client->send_lock, NULL) != 0))
+  if (
+    (pthread_mutex_init(&client->lock, NULL) != 0) ||
+    (pthread_mutex_init(&client->send_lock, NULL) != 0)
+  )
   {
-    LIBWSCLIENT_ON_ERROR(client, "Unable to init mutex or send lock in libwsclient_new.\n");
+    LIBWSCLIENT_ON_ERROR(
+      client, "Unable to init mutex or send lock in libwsclient_new.\n"
+    );
     free(client);
     return NULL;
   }
@@ -35,7 +39,9 @@ wsclient *libwsclient_new(const char *URI, int as_thread)
   client->URI = (char *)calloc(strlen(URI) + 1, 1);
   if (!client->URI)
   {
-    LIBWSCLIENT_ON_ERROR(client, "Unable to allocate memory in libwsclient_new.\n");
+    LIBWSCLIENT_ON_ERROR(
+      client, "Unable to allocate memory in libwsclient_new.\n"
+    );
     free(client);
     return NULL;
   }
@@ -44,7 +50,10 @@ wsclient *libwsclient_new(const char *URI, int as_thread)
 
   if (client->as_thread)
   {
-    if (pthread_create(&client->handshake_thread, NULL, libwsclient_handshake_thread, (void *)client))
+    if (pthread_create(
+      &client->handshake_thread, NULL, libwsclient_handshake_thread,
+      (void *)client)
+    )
     {
       LIBWSCLIENT_ON_ERROR(client, "Unable to create handshake thread.\n");
       free(client);
@@ -102,7 +111,9 @@ void libwsclient_close(wsclient *client)
   if (!TEST_FLAG(client, FLAG_CLIENT_CLOSEING))
   {
     char *reason = "0 byebye";
-    libwsclient_send_data(client, OP_CODE_CONTROL_CLOSE, (unsigned char*)reason, strlen(reason));
+    libwsclient_send_data(
+      client, OP_CODE_CONTROL_CLOSE, (unsigned char*)reason, strlen(reason)
+    );
     update_wsclient_status(client, FLAG_CLIENT_CLOSEING, 0);
   };
   // 提示退出
@@ -157,7 +168,10 @@ void libwsclient_send_string(wsclient *client, char *payload)
 // opcode: 类型， OP_CODE_TEXT 或者 OP_CODE_BINARY
 // payload: 待发送数据 (utf8字符串，或者字节数据)
 // payload_len: 待发送数据长度。
-void libwsclient_send_data(wsclient *client, int opcode, unsigned char *payload, unsigned long long payload_len)
+void libwsclient_send_data(
+  wsclient *client, int opcode, unsigned char *payload,
+  unsigned long long payload_len
+)
 {
   int mask_int = 0;
 
@@ -170,7 +184,9 @@ void libwsclient_send_data(wsclient *client, int opcode, unsigned char *payload,
 
   if (TEST_FLAG(client, (FLAG_CLIENT_CLOSEING | FLAG_CLIENT_QUIT)))
   {
-    LIBWSCLIENT_ON_ERROR(client, "Attempted to send after close frame was sent");
+    LIBWSCLIENT_ON_ERROR(
+      client, "Attempted to send after close frame was sent"
+    );
     return;
   }
   if (TEST_FLAG(client, FLAG_CLIENT_CONNECTING))
@@ -223,7 +239,9 @@ void libwsclient_send_data(wsclient *client, int opcode, unsigned char *payload,
         for (int i = 0; i < MAX_PAYLOAD_SIZE; i++)
           *(payload + MAX_PAYLOAD_SIZE * istep + i) ^= (header[4 + i % 4] & 0xff); // mask payload
         _libwsclient_write(client, header, 8);
-        _libwsclient_write(client, payload + MAX_PAYLOAD_SIZE * istep, nfragsize);
+        _libwsclient_write(
+          client, payload + MAX_PAYLOAD_SIZE * istep, nfragsize
+        );
 
         // next op = continue;
         b1 = OP_CODE_CONTINUE & 0x0f;
@@ -248,7 +266,9 @@ void libwsclient_send_data(wsclient *client, int opcode, unsigned char *payload,
         for (int i = 0; i < nfragsize; i++)
           *(payload + MAX_PAYLOAD_SIZE * istep + i) ^= (header[4 + i % 4] & 0xff); // mask payload
         _libwsclient_write(client, header, 6);
-        _libwsclient_write(client, payload + MAX_PAYLOAD_SIZE * (nfrag - 1), nfragsize);
+        _libwsclient_write(
+          client, payload + MAX_PAYLOAD_SIZE * (nfrag - 1), nfragsize
+        );
       }
     }
     else
@@ -317,7 +337,9 @@ void libwsclient_send_data(wsclient *client, int opcode, unsigned char *payload,
         for (unsigned long long i = 0; i < nfragsize; i++)
           *(payload + MAX_PAYLOAD_SIZE * istep + i) ^= (header[10 + i % 4] & 0xff); // mask payload
         _libwsclient_write(client, header, 14);
-        _libwsclient_write(client, payload + MAX_PAYLOAD_SIZE * (nfrag - 1), nfragsize);
+        _libwsclient_write(
+          client, payload + MAX_PAYLOAD_SIZE * (nfrag - 1), nfragsize
+        );
       }
     }
     else
@@ -348,5 +370,7 @@ void libwsclient_send_ping(wsclient *client, char *payload)
 {
   if (NULL == payload)
     payload = "ok";
-  libwsclient_send_data(client, OP_CODE_CONTROL_PING, (unsigned char*)payload, strlen(payload));
+  libwsclient_send_data(
+    client, OP_CODE_CONTROL_PING, (unsigned char*)payload, strlen(payload)
+  );
 }
