@@ -14,8 +14,8 @@
 
 #define FLAG_CLIENT_IS_SSL (1 << 0)
 #define FLAG_CLIENT_CONNECTING (1 << 1)
-#define FLAG_CLIENT_CLOSEING (1 << 2)	//最后一帧（close）以发送，以后不许再发任何数据。
-#define FLAG_CLIENT_QUIT (1 << 3)		//主动退出
+#define FLAG_CLIENT_CLOSEING (1 << 2)  //最后一帧（close）以发送，以后不许再发任何数据。
+#define FLAG_CLIENT_QUIT (1 << 3)    //主动退出
 
 #define FLAG_REQUEST_HAS_CONNECTION (1 << 0)
 #define FLAG_REQUEST_HAS_UPGRADE (1 << 1)
@@ -30,48 +30,48 @@ struct stream_buff {
 
 enum _WS_OP_CODE_
 {
-	OP_CODE_CONTINUE = 0,
-	OP_CODE_TYPE_TEXT = 1,
-	OP_CODE_TYPE_BINARY = 2,
-	OP_CODE_CONTROL_CLOSE = 8,
-	OP_CODE_CONTROL_PING = 9,
-	OP_CODE_CONTROL_PONG = 10,
+  OP_CODE_CONTINUE = 0,
+  OP_CODE_TYPE_TEXT = 1,
+  OP_CODE_TYPE_BINARY = 2,
+  OP_CODE_CONTROL_CLOSE = 8,
+  OP_CODE_CONTROL_PING = 9,
+  OP_CODE_CONTROL_PONG = 10,
 };
 
 typedef struct _wsclient_frame_in
 {
-	unsigned int fin;
-	unsigned int opcode;
-	unsigned long long payload_len;
-	unsigned char *payload;
-	struct _wsclient_frame_in *next_frame;
-	struct _wsclient_frame_in *prev_frame;
+  unsigned int fin;
+  unsigned int opcode;
+  unsigned long long payload_len;
+  unsigned char *payload;
+  struct _wsclient_frame_in *next_frame;
+  struct _wsclient_frame_in *prev_frame;
 } wsclient_frame_in;
 
 
 typedef struct _wsclient
 {
-	pthread_t handshake_thread;
-	pthread_t run_thread;
+  pthread_t handshake_thread;
+  pthread_t run_thread;
   pthread_t periodic_thread;
-	pthread_mutex_t lock;
-	pthread_mutex_t send_lock;
+  pthread_mutex_t lock;
+  pthread_mutex_t send_lock;
   int as_thread;
   int interval;
-	char *URI;
-	int sockfd;
-	int flags;
-	int (*onopen)(struct _wsclient *);
-	int (*onclose)(struct _wsclient *);
-	int (*onerror)(struct _wsclient *, int code, char *msg);
-	int (*onmessage)(struct _wsclient *, bool isText, unsigned long long lenth, unsigned char *data);
+  char *URI;
+  int sockfd;
+  int flags;
+  int (*onopen)(struct _wsclient *);
+  int (*onclose)(struct _wsclient *);
+  int (*onerror)(struct _wsclient *, int code, char *msg);
+  int (*onmessage)(struct _wsclient *, bool isText, unsigned long long lenth, unsigned char *data);
   int (*onperiodic)(struct _wsclient *);
-	wsclient_frame_in *current_frame;
+  wsclient_frame_in *current_frame;
   #ifdef HAVE_OPENSSL
-	SSL_CTX *ssl_ctx;
-	SSL *ssl;
+  SSL_CTX *ssl_ctx;
+  SSL *ssl;
   #endif
-	void *userdata;
+  void *userdata;
   struct stream_buff buf;
 } wsclient;
 
