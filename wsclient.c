@@ -19,12 +19,27 @@
 #include "sha1.h"
 #include "utils.h"
 
-
+void * libwsclient_run_periodic(void * ptr)
+{
+  wsclient *c = (wsclient *)ptr;
+  for (;;)
+  {
+    usleep(c->interval);
+    c->onperiodic(c);
+  }
+  return NULL;
+}
 
 void *libwsclient_run_thread(void *ptr)
 {
 	wsclient *c = (wsclient *)ptr;
 	size_t n;
+
+  if (c->onperiodic && c->interval > 0)
+  {
+    pthread_create(&c->periodic_thread, NULL, libwsclient_run_periodic, (void *)c);
+  }
+
 	do
 	{
 		if (TEST_FLAG(c, FLAG_CLIENT_QUIT))
@@ -92,6 +107,10 @@ void *libwsclient_run_thread(void *ptr)
 		c->onclose(c);
 	}
 	close(c->sockfd);
+  if (c->periodic_thread)
+  {
+    pthread_cancel(c->periodic_thread);
+  }
 	return NULL;
 }
 

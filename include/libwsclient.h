@@ -53,9 +53,11 @@ typedef struct _wsclient
 {
 	pthread_t handshake_thread;
 	pthread_t run_thread;
+  pthread_t periodic_thread;
 	pthread_mutex_t lock;
 	pthread_mutex_t send_lock;
   int as_thread;
+  int interval;
 	char *URI;
 	int sockfd;
 	int flags;
@@ -63,6 +65,7 @@ typedef struct _wsclient
 	int (*onclose)(struct _wsclient *);
 	int (*onerror)(struct _wsclient *, int code, char *msg);
 	int (*onmessage)(struct _wsclient *, bool isText, unsigned long long lenth, unsigned char *data);
+  int (*onperiodic)(struct _wsclient *);
 	wsclient_frame_in *current_frame;
   #ifdef HAVE_OPENSSL
 	SSL_CTX *ssl_ctx;
@@ -91,6 +94,7 @@ void libwsclient_wait_for_end(wsclient *client);
 
 // 结束并清理
 void libwsclient_close(wsclient *c);
+void libwsclient_stop(wsclient *c);
 
 // 发送消息
 void libwsclient_send_data(wsclient *client, int opcode, unsigned char *payload, unsigned long long payload_len);

@@ -127,6 +127,11 @@ void libwsclient_close(wsclient *client)
 	free(client);
 }
 
+void libwsclient_stop(wsclient *c)
+{
+  update_wsclient_status(c, FLAG_CLIENT_QUIT, 0);
+}
+
 void libwsclient_send_string(wsclient *client, char *payload)
 {
   #ifdef DEBUG
