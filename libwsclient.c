@@ -15,7 +15,7 @@
 #include "sha1.h"
 #include "utils.h"
 
-wsclient *libwsclient_new(const char *URI)
+wsclient *libwsclient_new(const char *URI, int as_thread)
 {
 	wsclient *client = NULL;
 
@@ -40,12 +40,16 @@ wsclient *libwsclient_new(const char *URI)
 		return NULL;
 	}
 	strncpy(client->URI, URI, strlen(URI));
+  client->as_thread = as_thread;
 
-	if (pthread_create(&client->handshake_thread, NULL, libwsclient_handshake_thread, (void *)client))
-	{
-		LIBWSCLIENT_ON_ERROR(client, "Unable to create handshake thread.\n");
-		free(client);
-		return NULL;
+  if (client->as_thread)
+  {
+    if (pthread_create(&client->handshake_thread, NULL, libwsclient_handshake_thread, (void *)client))
+    {
+      LIBWSCLIENT_ON_ERROR(client, "Unable to create handshake thread.\n");
+      free(client);
+      return NULL;
+    }
 	}
 	return client;
 }
@@ -54,7 +58,14 @@ void libwsclient_start_run(wsclient *c)
 {
 	if (TEST_FLAG(c, FLAG_CLIENT_CONNECTING))
 	{
-		pthread_join(c->handshake_thread, NULL);
+    if (c->as_thread)
+    {
+      pthread_join(c->handshake_thread, NULL);
+    }
+    else
+    {
+      (void)libwsclient_handshake_thread(c);
+    }
 
 		update_wsclient_status(c, 0, FLAG_CLIENT_CONNECTING);
 
@@ -63,7 +74,14 @@ void libwsclient_start_run(wsclient *c)
 	}
 	if (c->sockfd)
 	{
-		pthread_create(&c->run_thread, NULL, libwsclient_run_thread, (void *)c);
+    if (c->as_thread)
+    {
+      pthread_create(&c->run_thread, NULL, libwsclient_run_thread, (void *)c);
+    }
+    else
+    {
+      (void)libwsclient_run_thread(c);
+    }
 	}
 	else
 	{

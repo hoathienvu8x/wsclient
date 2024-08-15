@@ -491,11 +491,15 @@ int stricmp(const char *s1, const char *s2)
 size_t _libwsclient_read(wsclient *c, void *buf, size_t length)
 {
 	size_t n = 0;
+#ifdef DEBUG
 	char* sp = "";
+#endif
 
 	if (TEST_FLAG(c, FLAG_CLIENT_IS_SSL))
 	{
+    #ifdef DEBUG
 		sp = "ssl";
+    #endif
 		n = (ssize_t)SSL_read(c->ssl, buf, length);
 	}
 	else
@@ -515,15 +519,21 @@ size_t _libwsclient_write(wsclient *c, const void *buf, size_t length)
 {
 	pthread_mutex_lock(&c->send_lock);
 	ssize_t len = 0;
+#ifdef DEBUG
 	char* sp = "";
+#endif
 	if (TEST_FLAG(c, FLAG_CLIENT_IS_SSL))
 	{
+    #ifdef DEBUG
 		sp = "ssl";
+    #endif
 		len = (ssize_t) SSL_write(c->ssl, buf, length);
 	}
 	else
 	{
+    #ifdef DEBUG
 		sp = "";
+    #endif
 		len =  send(c->sockfd, buf, length, 0);
 	}
 	pthread_mutex_unlock(&c->send_lock);
