@@ -1,32 +1,40 @@
 MODNAME = lib/libwwsocket.a
  
-objects := $(patsubst %.c,%.o,$(wildcard *.c))
+objects := $(addprefix objects/,$(patsubst %.c,%.o,$(wildcard *.c)))
 
 MODOBJ = $(objects) 
 
 MODCFLAGS = -Wall -Wextra -pedantic --std=gnu99
 
+INCLUDE= -I. -I./include -lpthread
 
-INCLUDE= -I. -I./include 
-
+ifdef openssl
+	INCLUDE += -lssl -lcrypto -DHAVE_OPENSSL
+endif
  
 CC = gcc
-
-CFLAGS = -fPIC -g -ggdb  $(MODCFLAGS) $(INCLUDE) 
+ifeq ($(build),release)
+	CFLAGS = -fPIC -O3 $(MODCFLAGS) $(INCLUDE)
+else
+	CFLAGS = -fPIC -g -ggdb $(MODCFLAGS) $(INCLUDE)
+endif
 
 ifdef debug
-	CFLAGS += -g -ggdb  -DDEBUG 
+	CFLAGS += -g -ggdb -DDEBUG 
 endif
 
 .PHONY: all Debug Release
 all: $(MODNAME)
 
-$(MODNAME): $(MODOBJ)
-	ar rcs $(MODNAME) $(MODOBJ)
+$(MODNAME): objects $(MODOBJ)
+	@ar rcs $(MODNAME) $(MODOBJ)
 	ranlib $@
 
-.c.o: $<
-	@$(CC) $(CFLAGS) -o $@ -c $<
+objects:
+	@mkdir -p objects
+
+objects/%.o: %.c
+	$(CC) $(CFLAGS) -o $@ -c $<
 
 .PHONY: clean
 
