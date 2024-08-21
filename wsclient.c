@@ -445,14 +445,14 @@ void *libwsclient_handshake_thread(void *ptr)
   }
   strncpy(rcv, recv_buf, strlen(recv_buf));
 
-  char pre_encode[256] = {0};
+  char pre_encode[512] = {0};
   snprintf(pre_encode, 256, "%s%s", websocket_key, UUID);
   SHA1Reset(&shactx);
   SHA1Input(&shactx, (unsigned char*)pre_encode, strlen(pre_encode));
   SHA1Result(&shactx);
   memset(pre_encode, 0, 256);
   snprintf(
-    pre_encode, 256, "%08x%08x%08x%08x%08x", shactx.Message_Digest[0],
+    pre_encode, sizeof(pre_encode) - 1, "%08x%08x%08x%08x%08x", shactx.Message_Digest[0],
     shactx.Message_Digest[1], shactx.Message_Digest[2],
     shactx.Message_Digest[3], shactx.Message_Digest[4]
   );
