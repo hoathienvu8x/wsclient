@@ -60,13 +60,13 @@ typedef struct _wsclient
   char *URI;
   int sockfd;
   int flags;
-  int (*onopen)(struct _wsclient *);
-  int (*onclose)(struct _wsclient *);
-  int (*onerror)(struct _wsclient *, int code, char *msg);
-  int (*onmessage)(
+  void (*onopen)(struct _wsclient *);
+  void (*onclose)(struct _wsclient *);
+  void (*onerror)(struct _wsclient *, int code, char *msg);
+  void (*onmessage)(
     struct _wsclient *, int opcode, unsigned long long lenth, unsigned char *data
   );
-  int (*onperiodic)(struct _wsclient *);
+  void (*onperiodic)(struct _wsclient *);
   wsclient_frame_in *current_frame;
   #ifdef HAVE_OPENSSL
   SSL_CTX *ssl_ctx;
