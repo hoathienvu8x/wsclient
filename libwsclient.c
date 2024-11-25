@@ -116,7 +116,7 @@ void libwsclient_close(wsclient *client)
     );
     update_wsclient_status(client, FLAG_CLIENT_CLOSEING, 0);
   };
-  // 提示退出
+
   update_wsclient_status(client, FLAG_CLIENT_QUIT, 0);
   libwsclient_wait_for_end(client);
   pthread_mutex_destroy(&client->lock);
@@ -147,7 +147,7 @@ void libwsclient_send_string(wsclient *client, char *payload)
 {
   #ifdef DEBUG
   char buff[1024] = {0};
-  sprintf(buff, "websocket 发送数据 message: %s", payload);
+  sprintf(buff, "websocket sending data message: %s", payload);
   //if (ctl_frame->payload_len > 0)
   {
     LIBWSCLIENT_ON_INFO(client, buff);
@@ -163,11 +163,11 @@ void libwsclient_send_string(wsclient *client, char *payload)
   free(pdata);
 }
 
-// 发送数据
-// client: wsclient 对象;
-// opcode: 类型， OP_CODE_TEXT 或者 OP_CODE_BINARY
-// payload: 待发送数据 (utf8字符串，或者字节数据)
-// payload_len: 待发送数据长度。
+// Sending data
+// client: wsclient object
+// opcode: type, OP_CODE_TEXT or OP_CODE_BINARY
+// payload: Data to be sent (utf8 string or byte data)
+// payload_len: Length of data to be sent.
 void libwsclient_send_data(
   wsclient *client, int opcode, unsigned char *payload,
   unsigned long long payload_len
@@ -195,7 +195,7 @@ void libwsclient_send_data(
     return;
   }
   
-  // 新分配缓存区方便做mask亦或，以便传入的是const char* 字符串。
+  // A newly allocated buffer is convenient for masking or so that a const char* string is passed in.
   unsigned char *sendbuf = calloc(payload_len + 1, 1);
   memcpy(sendbuf, payload, payload_len);
   payload = sendbuf;
@@ -215,7 +215,7 @@ void libwsclient_send_data(
   }
   else if (payload_len > 125 && payload_len <= 0xffff)
   {
-    // 是否需要分片
+    // Is sharding required?
     if (payload_len > MAX_PAYLOAD_SIZE)
     {
       int nfragsize = MAX_PAYLOAD_SIZE;
@@ -246,7 +246,7 @@ void libwsclient_send_data(
         // next op = continue;
         b1 = OP_CODE_CONTINUE & 0x0f;
       } while (istep < (nfrag - 1));
-      // 最后一帧
+      // Last frame
       {
         // last fin = true;  op = continue;
         b1 = 0x80 | (OP_CODE_CONTINUE & 0x0f);
@@ -272,7 +272,7 @@ void libwsclient_send_data(
       }
     }
     else
-    { // 单帧
+    { // Single Frame
       unsigned char header[8] = {0};
       header[0] = 0x80 | (opcode & 0x0f);
       header[1] = 126 | 0x80;
@@ -290,7 +290,7 @@ void libwsclient_send_data(
   }
   else if (payload_len > 0xffff && payload_len <= 0xffffffffffffffffLL)
   {
-    // 是否需要分片
+    // Is sharding required?
     if (payload_len > MAX_PAYLOAD_SIZE)
     {
       unsigned long long nfragsize = MAX_PAYLOAD_SIZE;
@@ -318,7 +318,7 @@ void libwsclient_send_data(
         // next op = continue;
         b1 = OP_CODE_CONTINUE & 0x0f;
       } while (istep < (nfrag - 1));
-      // 最后一帧
+      // Last frame
       {
         // last fin = true;  op = continue;
         b1 = 0x80 | (OP_CODE_CONTINUE & 0x0f);
@@ -343,7 +343,7 @@ void libwsclient_send_data(
       }
     }
     else
-    { // 单帧
+    { // Single Frame
       unsigned char header[14] = {0};
       header[0] = 0x80 | (opcode & 0x0f);
       header[1] = 126 | 0x80;

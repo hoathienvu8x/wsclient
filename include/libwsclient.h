@@ -13,8 +13,8 @@
 
 #define FLAG_CLIENT_IS_SSL (1 << 0)
 #define FLAG_CLIENT_CONNECTING (1 << 1)
-#define FLAG_CLIENT_CLOSEING (1 << 2)  //最后一帧（close）以发送，以后不许再发任何数据。
-#define FLAG_CLIENT_QUIT (1 << 3)    //主动退出
+#define FLAG_CLIENT_CLOSEING (1 << 2)  //The last frame (close) is sent, and no more data is allowed to be sent afterwards.
+#define FLAG_CLIENT_QUIT (1 << 3)
 
 #define FLAG_REQUEST_HAS_CONNECTION (1 << 0)
 #define FLAG_REQUEST_HAS_UPGRADE (1 << 1)
@@ -78,33 +78,28 @@ typedef struct _wsclient
 
 // Function defs
 
-// 创建
 wsclient *libwsclient_new(const char *URI, int as_thread);
-// 设置参数
+
 /*
 void libwsclient_set_onopen(wsclient *client, int (*cb)(wsclient *c));
 void libwsclient_set_onmessage(wsclient *client, int (*cb)(wsclient *c, bool isText, unsigned long long lenth, unsigned char *data));
 void libwsclient_set_onerror(wsclient *client, int (*cb)(wsclient *c, int level, char *msg)); // level 0 = info; 1 = error; 2=fatal; ...
 void libwsclient_set_onclose(wsclient *client, int (*cb)(wsclient *c));
 */
-// 启动运行
+
 void libwsclient_start_run(wsclient *c);
 
-//可选等待线程结束。可以用于消息循环作用。
 void libwsclient_wait_for_end(wsclient *client);
 
-// 结束并清理
 void libwsclient_close(wsclient *c);
 void libwsclient_stop(wsclient *c);
 
-// 发送消息
 void libwsclient_send_data(
   wsclient *client, int opcode, unsigned char *payload,
   unsigned long long payload_len
 );
 void libwsclient_send_string(wsclient *client, char *payload);
 
-// 可选，定时发送ping
 void libwsclient_send_ping(wsclient *client, char *payload);
 
 #endif /* LIB_WSCLIENT_H_ */

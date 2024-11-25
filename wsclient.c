@@ -74,7 +74,6 @@ void *libwsclient_run_thread(void *ptr)
       len = ntoh64(ulen);
     }
 
-    // 注，作为client来说，收到的frame来自server，按照 rfc6455 规范，总是没有mask的。此处忽略mask处理。
     wsclient_frame_in *pframe = calloc(sizeof(wsclient_frame_in), 1);
     pframe->fin = fin;
     pframe->opcode = op;
@@ -102,7 +101,7 @@ void *libwsclient_run_thread(void *ptr)
   } while (n > 0);
 
   if (!TEST_FLAG(c, FLAG_CLIENT_QUIT))
-  {  //不是主动退出的。
+  {
     LIBWSCLIENT_ON_ERROR(c, "Error receiving data in client run thread");
   }
 
@@ -121,7 +120,6 @@ void *libwsclient_run_thread(void *ptr)
 
 void libwsclient_handle_control_frame(wsclient *c, wsclient_frame_in *ctl_frame)
 {
-  // rfc6455: 控制帧payload必须在125内，且不能分片。
   // char mask[4];
   // int mask_int;
   // struct timeval tv;
@@ -133,23 +131,18 @@ void libwsclient_handle_control_frame(wsclient *c, wsclient_frame_in *ctl_frame)
   {
   case OP_CODE_CONTROL_CLOSE:
 #ifdef DEBUG
-    // LIBWSCLIENT_ON_INFO(c, "websocket 收到控制---关闭.\n");
+    // LIBWSCLIENT_ON_INFO(c, "websocket Received control --- Close.\n");
     if (ctl_frame->payload_len > 0)
     {
       char buff[1024] = {0};
       sprintf(
-        buff, "websocket 收到控制---关闭, len: %llu; code: %x,%x; reason: %s",
+        buff, "websocket Receive control --- Close, len: %llu; code: %x,%x; reason: %s",
         ctl_frame->payload_len, ctl_frame->payload[0], ctl_frame->payload[1],
         ctl_frame->payload + 2
       );
       LIBWSCLIENT_ON_INFO(c, buff);
     }
 #endif 
-    // close frame 定义 by rfc6455:
-    // 1. payload 一般为空。如果不为空，格式为： 2byte 错误码 + 任意长度的错误原因。
-    // 1.1 收到有playload的close frame，回复的close frame，需要原样带上payload。
-    // 2. 收到 close frame，必须回复一个 close frame，除非是自己主动发的(避免死循环).
-    // 3. close frame 必须是最后一个frame. 此后不允许再发任何包。
     if (!(TEST_FLAG(c, FLAG_CLIENT_CLOSEING)))
     {
       // server request close.  Send close frame as acknowledgement.
@@ -159,13 +152,9 @@ void libwsclient_handle_control_frame(wsclient *c, wsclient_frame_in *ctl_frame)
       update_wsclient_status(c, FLAG_CLIENT_CLOSEING, 0);
     }
     break;
-  // ping, pong in rfc6455:
-  // 1. ping 可以携带payload，如果有携带， pong需要原样带上（除了mask）。
-  // 2. 如果来不及 pong，那么只需要对最近一次的ping做pong就行。
-  // 3. 可以在没有ping的时候，主动pong。这就形成了单向的（无需回应的）的心跳检查机制。
   case OP_CODE_CONTROL_PING:
 #ifdef DEBUG
-    LIBWSCLIENT_ON_INFO(c, "websocket 收到控制---PING.\n");
+    LIBWSCLIENT_ON_INFO(c, "websocket Receive control---PING.\n");
 #endif 
     libwsclient_send_data(
       c, OP_CODE_CONTROL_PONG, ctl_frame->payload, ctl_frame->payload_len
@@ -173,9 +162,8 @@ void libwsclient_handle_control_frame(wsclient *c, wsclient_frame_in *ctl_frame)
     break;
   case OP_CODE_CONTROL_PONG:
 #ifdef DEBUG
-    LIBWSCLIENT_ON_INFO(c, "websocket 收到控制---PONG.\n");
+    LIBWSCLIENT_ON_INFO(c, "websocket Receive control---PONG.\n");
 #endif 
-    // 无需响应
     break;
   default:
     LIBWSCLIENT_ON_ERROR(c, "Unhandled control frame received.\n");
@@ -186,12 +174,12 @@ void libwsclient_handle_control_frame(wsclient *c, wsclient_frame_in *ctl_frame)
 inline void handle_on_data_frame_in(wsclient *c, wsclient_frame_in *pframe)
 {
 #ifdef DEBUG
-  LIBWSCLIENT_ON_INFO(c, "websocket 收到数据.\n");
+  LIBWSCLIENT_ON_INFO(c, "websocket Receive data.\n");
 #endif
   if (pframe->fin)
   {
     if (pframe->opcode == OP_CODE_CONTINUE)
-    { // 多幁，需合并。
+    {
       pframe->prev_frame = c->current_frame;
       c->current_frame->next_frame = pframe;
       wsclient_frame_in *p = pframe;
@@ -218,22 +206,18 @@ inline void handle_on_data_frame_in(wsclient *c, wsclient_frame_in *pframe)
       free(p);
       c->current_frame = NULL;
 
-      // 按照rfc6455, 多帧只可能是数据帧，控制帧只能是单帧，且payload在126以内。
       if (c->onmessage)
         c->onmessage(c, op, payload_len, payload);
       free(payload);
     }
     else
     {
-      // 单独一帧
       if ((pframe->opcode & OP_CODE_CONTROL_CLOSE) == OP_CODE_CONTROL_CLOSE)
       {
-        // 控制帧。 
         libwsclient_handle_control_frame(c, pframe);
       }
       else
       {
-        // 单帧消息
         if (c->onmessage)
           c->onmessage(c, pframe->opcode, pframe->payload_len, pframe->payload);
       }
@@ -242,7 +226,7 @@ inline void handle_on_data_frame_in(wsclient *c, wsclient_frame_in *pframe)
     }
   }
   else
-  { // 多帧合并，尚未结束。
+  {
     if (c->current_frame == NULL)
       c->current_frame = pframe;
     else
@@ -378,7 +362,7 @@ void *libwsclient_handshake_thread(void *ptr)
     #ifdef HAVE_OPENSSL
     static bool b_ssl_need_inited = true;
     if (b_ssl_need_inited)
-    { // openssl 版本号小于等于 1.0.2 时，需要加入这个初始化；大于 1.1.0 则无需调用，自动完成。
+    {
       SSL_library_init();
       SSL_load_error_strings();
       b_ssl_need_inited = false;
@@ -517,9 +501,9 @@ void *libwsclient_handshake_thread(void *ptr)
     );
     return NULL;
   }
-  #ifdef DEBUG
-  // LIBWSCLIENT_ON_INFO(client, "websocket握手完成.\n");
-  #endif
+  // #ifdef DEBUG
+  // LIBWSCLIENT_ON_INFO(client, "websocket handshake completed.\n");
+  // #endif
   update_wsclient_status(client, 0, FLAG_CLIENT_CONNECTING);
 
   if (client->onopen != NULL)
