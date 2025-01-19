@@ -558,6 +558,7 @@ size_t _libwsclient_read(wsclient *c, void *buf, size_t length)
       }
       if (ret <= 0)
       {
+        if (ret < 0) c->buf.pos -= n;
         return ret;
       }
       c->buf.pos = 0;
