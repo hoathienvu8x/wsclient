@@ -7,12 +7,15 @@
 #include <string.h>
 
 #include <sys/time.h>
+#include <math.h>
 
 #include "./include/libwsclient.h"
 #include "wsclient.h"
 
 #include "sha1.h"
 #include "utils.h"
+
+#define MAX_PAYLOAD_PAD (MAX_PAYLOAD_SIZE - 15)
 
 wsclient *libwsclient_new(const char *URI, int as_thread)
 {
@@ -106,13 +109,12 @@ void libwsclient_wait_for_end(wsclient *client)
   }
 }
 
-void libwsclient_close(wsclient *client)
+void libwsclient_close(wsclient *client, char *reason)
 {
   if (!TEST_FLAG(client, FLAG_CLIENT_CLOSEING))
   {
-    char *reason = "0 byebye";
     libwsclient_send_data(
-      client, OP_CODE_CONTROL_CLOSE, (unsigned char*)reason, strlen(reason)
+      client, OP_CODE_CONTROL_CLOSE, (unsigned char*)reason, reason ? strlen(reason) : 0
     );
     update_wsclient_status(client, FLAG_CLIENT_CLOSEING, 0);
   };
@@ -154,13 +156,7 @@ void libwsclient_send_string(wsclient *client, char *payload)
   }
   #endif
 
-  int nlen = strlen(payload);
-  if (nlen <= 0)
-    return;
-  void *pdata = calloc(1, nlen);
-  memcpy(pdata, payload, nlen);
-  libwsclient_send_data(client, OP_CODE_TYPE_TEXT, pdata, nlen);
-  free(pdata);
+  libwsclient_send_data(client, OP_CODE_TYPE_TEXT, (unsigned char *)payload, payload ? strlen(payload) : 0);
 }
 
 // Sending data
@@ -180,8 +176,6 @@ void libwsclient_send_data(
   srand(tv.tv_usec * tv.tv_sec);
   mask_int = rand();
 
-
-
   if (TEST_FLAG(client, (FLAG_CLIENT_CLOSEING | FLAG_CLIENT_QUIT)))
   {
     LIBWSCLIENT_ON_ERROR(
@@ -194,183 +188,68 @@ void libwsclient_send_data(
     LIBWSCLIENT_ON_ERROR(client, "Attempted to send during connect");
     return;
   }
+
+  if (opcode == OP_CODE_TYPE_TEXT || opcode == OP_CODE_TYPE_BINARY)
+  {
+    if (!payload || payload_len == 0)
+    {
+      LIBWSCLIENT_ON_ERROR(client, "Payload data is empty");
+      return;
+    }
+  }
   
-  // A newly allocated buffer is convenient for masking or so that a const char* string is passed in.
-  unsigned char *sendbuf = calloc(payload_len + 1, 1);
-  memcpy(sendbuf, payload, payload_len);
-  payload = sendbuf;
+  unsigned char frame_data[MAX_PAYLOAD_SIZE] = {0};
+  int i, frame_count = ceil((float)payload_len / (float)MAX_PAYLOAD_PAD);
+  if (frame_count == 0) frame_count = 1;
 
-  if (payload_len <= 125)
-  {
-    unsigned char header[6] = {0};
-    header[0] = 0x80 | (opcode & 0x0f); // pframe->fin & 0x80;   // fin flag and op code
-    header[1] = payload_len | 0x80;    // add mask
-    memcpy(&header[2], &mask_int, 4);
-
-    for (size_t i = 0; i < payload_len; i++)
-      *(payload + i) ^= (header[2 + i % 4] & 0xff); // mask payload
-
-    _libwsclient_write(client, header, 6);
-    _libwsclient_write(client, payload, payload_len);
-  }
-  else if (payload_len > 125 && payload_len <= 0xffff)
-  {
-    // Is sharding required?
-    if (payload_len > MAX_PAYLOAD_SIZE)
-    {
-      int nfragsize = MAX_PAYLOAD_SIZE;
-      int nfrag = payload_len / MAX_PAYLOAD_SIZE;
-      if (payload_len % MAX_PAYLOAD_SIZE)
-        nfrag += 1;
-      int istep = 0;
-      int b1 = opcode & 0x0f; // fin = 0, opcode= code;
-      do
-      {
-        unsigned char header[8] = {0};
-        header[0] = b1 & 0xff;
-        header[1] = 126 | 0x80;
-        nfragsize &= 0xffff;
-        for (int i = 0; i < 2; i++)
-        {
-          header[2 + i] = *((char *)&nfragsize + (2 - i - 1));
-        }
-        memcpy(&header[4], &mask_int, 4);
-
-        for (int i = 0; i < MAX_PAYLOAD_SIZE; i++)
-          *(payload + MAX_PAYLOAD_SIZE * istep + i) ^= (header[4 + i % 4] & 0xff); // mask payload
-        _libwsclient_write(client, header, 8);
-        _libwsclient_write(
-          client, payload + MAX_PAYLOAD_SIZE * istep, nfragsize
-        );
-
-        // next op = continue;
-        b1 = OP_CODE_CONTINUE & 0x0f;
-      } while (istep < (nfrag - 1));
-      // Last frame
-      {
-        // last fin = true;  op = continue;
-        b1 = 0x80 | (OP_CODE_CONTINUE & 0x0f);
-        nfragsize = payload_len % MAX_PAYLOAD_SIZE;
-        if (nfragsize == 0)
-          nfragsize = MAX_PAYLOAD_SIZE;
-
-        unsigned char header[8] = {0};
-        header[0] = b1 & 0xff;
-        header[1] = 126 | 0x80;
-        nfragsize &= 0xffff;
-        for (int i = 0; i < 2; i++)
-        {
-          header[2 + i] = *((char *)&nfragsize + (2 - i - 1));
-        }
-        memcpy(&header[4], &mask_int, 4);
-        for (int i = 0; i < nfragsize; i++)
-          *(payload + MAX_PAYLOAD_SIZE * istep + i) ^= (header[4 + i % 4] & 0xff); // mask payload
-        _libwsclient_write(client, header, 6);
-        _libwsclient_write(
-          client, payload + MAX_PAYLOAD_SIZE * (nfrag - 1), nfragsize
-        );
-      }
+  for (i = 0; i < frame_count; i++) {
+    uint64_t frame_size = i != frame_count - 1 ? MAX_PAYLOAD_PAD : payload_len % MAX_PAYLOAD_PAD;
+    char op_code = i != 0 ? OP_CODE_CONTINUE : opcode;
+    char fin = i != frame_count - 1 ? 0 : 1;
+    memset(frame_data, 0, sizeof(frame_data));
+    uint64_t frame_length = frame_size;
+    int offset = 2;
+    frame_data[0] |= (fin << 7) & 0x80;
+    frame_data[0] |= op_code & 0xf;
+    if (frame_size <= 125) {
+      frame_data[1] = frame_size & 0x7f;
+      frame_length += 2;
+    } else if (frame_size >= 126 && frame_size <= 65535) {
+      frame_data[1] = 126;
+      frame_data[2] = (frame_size >> 8) & 255;
+      frame_data[3] = (frame_size & 255);
+      frame_length += 4;
+      offset += 2;
+    } else {
+      frame_data[1] = 127;
+      frame_data[2] = (unsigned char)((frame_size >> 56) & 255);
+      frame_data[3] = (unsigned char)((frame_size >> 48) & 255);
+      frame_data[4] = (unsigned char)((frame_size >> 40) & 255);
+      frame_data[5] = (unsigned char)((frame_size >> 32) & 255);
+      frame_data[6] = (unsigned char)((frame_size >> 24) & 255);
+      frame_data[7] = (unsigned char)((frame_size >> 16) & 255);
+      frame_data[8] = (unsigned char)((frame_size >> 8) & 255);
+      frame_data[9] = (unsigned char)(frame_size & 255);
+      frame_length += 10;
+      offset += 8;
     }
-    else
-    { // Single Frame
-      unsigned char header[8] = {0};
-      header[0] = 0x80 | (opcode & 0x0f);
-      header[1] = 126 | 0x80;
-      int nfragsize = payload_len & 0xffff;
-      for (int i = 0; i < 2; i++)
-      {
-        header[2 + i] = *((char *)&nfragsize + (2 - i - 1));
-      }
-      memcpy(&header[4], &mask_int, 4);
-      for (int i = 0; i < nfragsize; i++)
-        *(payload + i) ^= (header[4 + i % 4] & 0xff); // mask payload
-      _libwsclient_write(client, header, 8);
-      _libwsclient_write(client, payload, nfragsize);
+    frame_data[1] |= 0x80;
+    memcpy(frame_data + offset, &mask_int, 4);
+    offset += 4;
+    frame_length += 4;
+    memcpy (frame_data + offset, &payload[i * MAX_PAYLOAD_PAD], frame_size);
+    uint64_t n;
+    for (n = 0; n < frame_size; n++) {
+      frame_data[offset + n] ^= (frame_data[offset - 4 + n % 4] & 0xff);
     }
+    frame_data[frame_length] = '\0';
+    _libwsclient_write(client, frame_data, frame_length);
   }
-  else if (payload_len > 0xffff && payload_len <= 0xffffffffffffffffLL)
-  {
-    // Is sharding required?
-    if (payload_len > MAX_PAYLOAD_SIZE)
-    {
-      unsigned long long nfragsize = MAX_PAYLOAD_SIZE;
-      unsigned long long nfrag = payload_len / MAX_PAYLOAD_SIZE;
-      if (payload_len % MAX_PAYLOAD_SIZE)
-        nfrag += 1;
-      size_t istep = 0;
-      int b1 = opcode & 0x0f; // fin = 0, opcode= code;
-      do
-      {
-        unsigned char header[14] = {0};
-        header[0] = b1 & 0xff;
-        header[1] = 127 | 0x80;
-        for (int i = 0; i < 8; i++)
-        {
-          header[2 + i] = *((char *)&nfragsize + (8 - i - 1));
-        }
-        memcpy(&header[10], &mask_int, 4);
-
-        for (unsigned long long i = 0; i < MAX_PAYLOAD_SIZE; i++)
-          *(payload + MAX_PAYLOAD_SIZE * istep + i) ^= (header[10 + i % 4] & 0xff); // mask payload
-        _libwsclient_write(client, header, 14);
-        _libwsclient_write(client, payload + MAX_PAYLOAD_SIZE * istep, nfragsize);
-
-        // next op = continue;
-        b1 = OP_CODE_CONTINUE & 0x0f;
-      } while (istep < (nfrag - 1));
-      // Last frame
-      {
-        // last fin = true;  op = continue;
-        b1 = 0x80 | (OP_CODE_CONTINUE & 0x0f);
-        nfragsize = payload_len % MAX_PAYLOAD_SIZE;
-        if (nfragsize == 0)
-          nfragsize = MAX_PAYLOAD_SIZE;
-
-        unsigned char header[14] = {0};
-        header[0] = b1 & 0xff;
-        header[1] = 127 | 0x80;
-        for (int i = 0; i < 8; i++)
-        {
-          header[2 + i] = *((char *)&nfragsize + (2 - i - 1));
-        }
-        memcpy(&header[10], &mask_int, 4);
-        for (unsigned long long i = 0; i < nfragsize; i++)
-          *(payload + MAX_PAYLOAD_SIZE * istep + i) ^= (header[10 + i % 4] & 0xff); // mask payload
-        _libwsclient_write(client, header, 14);
-        _libwsclient_write(
-          client, payload + MAX_PAYLOAD_SIZE * (nfrag - 1), nfragsize
-        );
-      }
-    }
-    else
-    { // Single Frame
-      unsigned char header[14] = {0};
-      header[0] = 0x80 | (opcode & 0x0f);
-      header[1] = 126 | 0x80;
-      int nfragsize = payload_len;
-      for (int i = 0; i < 8; i++)
-      {
-        header[2 + i] = *((char *)&nfragsize + (2 - i - 1));
-      }
-      memcpy(&header[10], &mask_int, 4);
-      for (int i = 0; i < nfragsize; i++)
-        *(payload + i) ^= (header[10 + i % 4] & 0xff); // mask payload
-      _libwsclient_write(client, header, 14);
-      _libwsclient_write(client, payload, nfragsize);
-    }
-  }
-  else
-  {
-    LIBWSCLIENT_ON_ERROR(client, "Attempted to send too much data");
-  }
-  free(sendbuf);
 }
 
 void libwsclient_send_ping(wsclient *client, char *payload)
 {
-  if (NULL == payload)
-    payload = "ok";
   libwsclient_send_data(
-    client, OP_CODE_CONTROL_PING, (unsigned char*)payload, strlen(payload)
+    client, OP_CODE_CONTROL_PING, (unsigned char*)payload, payload ? strlen(payload) : 0
   );
 }

@@ -91,7 +91,7 @@ void libwsclient_start_run(wsclient *c);
 
 void libwsclient_wait_for_end(wsclient *client);
 
-void libwsclient_close(wsclient *c);
+void libwsclient_close(wsclient *c, char *reason);
 void libwsclient_stop(wsclient *c);
 
 void libwsclient_send_data(
