@@ -190,7 +190,7 @@ inline void handle_on_data_frame_in(wsclient *c, wsclient_frame_in *pframe)
         payload_len += p->payload_len;
       }
       int op = p->opcode;
-      unsigned char *payload = calloc(payload_len, 1);
+      unsigned char *payload = calloc(payload_len + 1, 1);
       int offset = 0;
       memcpy(payload, p->payload, p->payload_len);
       offset += p->payload_len;
@@ -207,7 +207,10 @@ inline void handle_on_data_frame_in(wsclient *c, wsclient_frame_in *pframe)
       c->current_frame = NULL;
 
       if (c->onmessage)
+      {
+        *(payload + payload_len) = '\0';
         c->onmessage(c, op, payload_len, payload);
+      }
       free(payload);
     }
     else
@@ -219,7 +222,10 @@ inline void handle_on_data_frame_in(wsclient *c, wsclient_frame_in *pframe)
       else
       {
         if (c->onmessage)
+        {
+          *(pframe->payload + pframe->payload_len) = '\0';
           c->onmessage(c, pframe->opcode, pframe->payload_len, pframe->payload);
+        }
       }
       free(pframe->payload);
       free(pframe);
