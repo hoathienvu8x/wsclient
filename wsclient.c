@@ -19,6 +19,13 @@
 #include "sha1.h"
 #include "utils.h"
 
+#ifdef HAVE_MBEDTLS
+void mbedtls_net_set_fd(mbedtls_net_context *ctx, int fd) {
+  if (!ctx) return;
+  ctx->fd = fd;
+}
+#endif
+
 void * libwsclient_run_periodic(void * ptr)
 {
   wsclient *c = (wsclient *)ptr;
@@ -378,7 +385,7 @@ void *libwsclient_handshake_thread(void *ptr)
 
   if (TEST_FLAG(client, FLAG_CLIENT_IS_SSL))
   {
-    #ifdef HAVE_OPENSSL
+    #if defined(HAVE_OPENSSL)
     static bool b_ssl_need_inited = true;
     if (b_ssl_need_inited)
     {
@@ -390,6 +397,52 @@ void *libwsclient_handshake_thread(void *ptr)
     client->ssl = SSL_new(client->ssl_ctx);
     SSL_set_fd(client->ssl, sockfd);
     SSL_connect(client->ssl);
+    #elif defined(HAVE_MBEDTLS)
+    mbedtls_net_init(&client->net);
+    mbedtls_ssl_init(&client->ssl);
+    mbedtls_ssl_config_init(&client->conf);
+    mbedtls_ctr_drbg_init(&client->ctr_drbg);
+    mbedtls_entropy_init(&client->entropy);
+    if (mbedtls_ctr_drbg_seed(
+      &client->ctr_drbg, mbedtls_entropy_func, &client->entropy, NULL, 0
+    )) {
+      LIBWSCLIENT_ON_ERROR(client, "Setting entropy seed failed");
+      return NULL;
+    }
+    if (mbedtls_ssl_config_defaults(&client->conf,
+      MBEDTLS_SSL_IS_CLIENT, MBEDTLS_SSL_TRANSPORT_STREAM,
+      MBEDTLS_SSL_PRESET_DEFAULT
+    )) {
+      LIBWSCLIENT_ON_ERROR(client, "Setting config default failed");
+      return NULL;
+    }
+    mbedtls_ssl_conf_authmode(&client->conf, MBEDTLS_SSL_VERIFY_NONE);
+    mbedtls_ssl_conf_rng(&client->conf, mbedtls_ctr_drbg_random, &client->ctr_drbg);
+    if (mbedtls_ssl_setup(&client->ssl, &client->conf)) {
+      LIBWSCLIENT_ON_ERROR(client, "SSL setup failed");
+      return NULL;
+    }
+    if (mbedtls_ssl_set_hostname(&client->ssl, host)) {
+      LIBWSCLIENT_ON_ERROR(client, "SNI setup failed");
+      return NULL;
+    }
+    mbedtls_net_set_fd(&client->net, sockfd);
+    mbedtls_ssl_set_bio(&client->ssl, &client->net, mbedtls_net_send, mbedtls_net_recv, 0);
+    int ret = 0;
+    do {
+      ret = mbedtls_ssl_handshake(&client->ssl);
+    } while (ret == MBEDTLS_ERR_SSL_WANT_READ || ret == MBEDTLS_ERR_SSL_WANT_WRITE);
+    if (ret) {
+      char buf[256];
+      strcat(buf, "error in handshake : ");
+      mbedtls_strerror(flags, buf + strlen(buf), sizeof(buf) - strlen(buf));
+      LIBWSCLIENT_ON_ERROR(client, buf);
+      return NULL;
+    }
+    if (mbedtls_ssl_get_verify_result(&client->ssl)) {
+      LIBWSCLIENT_ON_ERROR(client, "Error while verify ssl handshake");
+      return NULL;
+    }
     #else
     LIBWSCLIENT_ON_ERROR(client, "Error while setting ssl");
     return NULL;
@@ -564,9 +617,13 @@ size_t _libwsclient_read(wsclient *c, void *buf, size_t length)
         #ifdef DEBUG
         sp = "ssl";
         #endif
-        #ifdef HAVE_OPENSSL
+        #if defined(HAVE_OPENSSL)
         ret = (ssize_t)SSL_read(
           c->ssl, (unsigned char *)c->buf.data, sizeof(c->buf.data)
+        );
+        #elif defined(HAVE_MBEDTLS)
+        ret = (ssize_t)mbedtls_ssl_read(
+          &c->ssl, (unsigned char *)c->buf.data, sizeof(c->buf.data)
         );
         #endif
       }
@@ -608,8 +665,10 @@ size_t _libwsclient_write(wsclient *c, const void *buf, size_t length)
     #ifdef DEBUG
     sp = "ssl";
     #endif
-    #ifdef HAVE_OPENSSL
+    #if defined(HAVE_OPENSSL)
     len = (ssize_t) SSL_write(c->ssl, buf, length);
+    #elif defined(HAVE_MBEDTLS)
+    len = (ssize_t)mbedtls_ssl_write(&c->ssl, (unsigned char *)buf, length);
     #endif
   }
   else

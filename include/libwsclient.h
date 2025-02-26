@@ -2,10 +2,17 @@
 #define LIB_WSCLIENT_H_
 
 #include <stddef.h>
-#ifdef HAVE_OPENSSL
-#include <openssl/ssl.h>
-#include <openssl/err.h>
-#include <openssl/crypto.h>
+#if defined(HAVE_OPENSSL)
+  #include <openssl/ssl.h>
+  #include <openssl/err.h>
+  #include <openssl/crypto.h>
+#elif defined(HAVE_MBEDTLS)
+  #include <mbedtls/entropy.h>
+  #include <mbedtls/ctr_drbg.h>
+  #include <mbedtls/net.h>
+  #include <mbedtls/error.h>
+  #include <mbedtls/platform.h>
+  #include <mbedtls/debug.h>
 #endif
 
 #define FRAME_CHUNK_LENGTH 1024
@@ -68,9 +75,15 @@ typedef struct _wsclient
   );
   void (*onperiodic)(struct _wsclient *);
   wsclient_frame_in *current_frame;
-  #ifdef HAVE_OPENSSL
+  #if defined(HAVE_OPENSSL)
   SSL_CTX *ssl_ctx;
   SSL *ssl;
+  #elif defined(HAVE_MBEDTLS)
+  mbedtls_net_context net;
+  mbedtls_ssl_context ssl;
+  mbedtls_ssl_config conf;
+  mbedtls_entropy_context entropy;
+  mbedtls_ctr_drbg_context ctr_drbg;
   #endif
   void *userdata;
   struct stream_buff buf;

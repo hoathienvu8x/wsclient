@@ -143,7 +143,7 @@ void libwsclient_close(wsclient *client, char *reason)
   pthread_mutex_destroy(&client->send_lock);
   if (TEST_FLAG(client, FLAG_CLIENT_IS_SSL))
   {
-    #ifdef HAVE_OPENSSL
+    #if defined(HAVE_OPENSSL)
     if (client->ssl)
     {
       SSL_shutdown(client->ssl);
@@ -153,6 +153,12 @@ void libwsclient_close(wsclient *client, char *reason)
     {
       SSL_CTX_free(client->ssl_ctx);
     }
+    #elif defined(HAVE_MBEDTLS)
+    mbedtls_net_free(&client->net);
+    mbedtls_ssl_free(&client->ssl);
+    mbedtls_ssl_config_free(&client->conf);
+    mbedtls_ctr_drbg_free(&client->ctr_drbg);
+    mbedtls_entropy_free(&client->entropy);
     #endif
   }
   free(client);
