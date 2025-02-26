@@ -22,6 +22,7 @@
 void * libwsclient_run_periodic(void * ptr)
 {
   wsclient *c = (wsclient *)ptr;
+  if (!c) return NULL;
   for (;;)
   {
     usleep(c->interval);
@@ -33,6 +34,7 @@ void * libwsclient_run_periodic(void * ptr)
 void *libwsclient_run_thread(void *ptr)
 {
   wsclient *c = (wsclient *)ptr;
+  if (!c) return NULL;
   size_t n;
 
   if (c->onperiodic && c->interval > 0)
@@ -46,6 +48,7 @@ void *libwsclient_run_thread(void *ptr)
   {
     if (TEST_FLAG(c, FLAG_CLIENT_QUIT))
       break;
+
     unsigned char head[2] = {0};
     n = _libwsclient_read(c, head, 2);
     if (n < 2)
@@ -75,10 +78,15 @@ void *libwsclient_run_thread(void *ptr)
     }
 
     wsclient_frame_in *pframe = calloc(sizeof(wsclient_frame_in), 1);
+    if (!pframe) break;
     pframe->fin = fin;
     pframe->opcode = op;
     pframe->payload_len = len;
     pframe->payload = calloc(len + 1, 1);
+    if (!pframe->payload) {
+      free(pframe);
+      break;
+    }
 
     size_t z = 0;
     do
@@ -113,6 +121,7 @@ void *libwsclient_run_thread(void *ptr)
   if (c->periodic_thread)
   {
     pthread_cancel(c->periodic_thread);
+    pthread_join(c->periodic_thread, NULL);
   }
   return NULL;
 }
@@ -120,6 +129,7 @@ void *libwsclient_run_thread(void *ptr)
 
 void libwsclient_handle_control_frame(wsclient *c, wsclient_frame_in *ctl_frame)
 {
+  if (!c || !ctl_frame) return;
   // char mask[4];
   // int mask_int;
   // struct timeval tv;
@@ -173,6 +183,7 @@ void libwsclient_handle_control_frame(wsclient *c, wsclient_frame_in *ctl_frame)
 
 inline void handle_on_data_frame_in(wsclient *c, wsclient_frame_in *pframe)
 {
+  if (!c || !pframe) return;
 #ifdef DEBUG
   LIBWSCLIENT_ON_INFO(c, "websocket Receive data.\n");
 #endif
@@ -246,6 +257,7 @@ inline void handle_on_data_frame_in(wsclient *c, wsclient_frame_in *pframe)
 
 int libwsclient_open_connection(const char *host, const char *port)
 {
+  if (!port || strlen(port) == 0) return 0;
   struct addrinfo hints, *servinfo, *p;
   int rv, sockfd;
   memset(&hints, 0, sizeof(hints));
@@ -280,6 +292,7 @@ int libwsclient_open_connection(const char *host, const char *port)
 void *libwsclient_handshake_thread(void *ptr)
 {
   wsclient *client = (wsclient *)ptr;
+  if (!client) return NULL;
   const char *URI = client->URI;
   SHA1Context shactx;
   const char *UUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
@@ -542,6 +555,7 @@ size_t _libwsclient_read(wsclient *c, void *buf, size_t length)
   #ifdef DEBUG
   char* sp = "";
   #endif
+  if (!c || !buf || length == 0) return 0;
   for (; n < length; n++) {
     if (c->buf.pos == 0 || c->buf.pos == c->buf.len)
     {
@@ -583,6 +597,7 @@ size_t _libwsclient_read(wsclient *c, void *buf, size_t length)
 
 size_t _libwsclient_write(wsclient *c, const void *buf, size_t length)
 {
+  if (!c || !buf || length == 0) return 0;
   pthread_mutex_lock(&c->send_lock);
   ssize_t len = 0;
   #ifdef DEBUG
@@ -615,6 +630,7 @@ size_t _libwsclient_write(wsclient *c, const void *buf, size_t length)
 
 void update_wsclient_status(wsclient *c, int add, int del)
 {
+  if (!c) return;
   pthread_mutex_lock(&c->lock);
   if (add)
     c->flags |= add;

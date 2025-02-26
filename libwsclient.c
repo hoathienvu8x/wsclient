@@ -27,28 +27,31 @@ wsclient *libwsclient_new(const char *URI, int as_thread)
     // LIBWSCLIENT_ON_ERROR(client, "Unable to allocate memory in libwsclient_new.\n");
     return NULL;
   }
-  if (
-    (pthread_mutex_init(&client->lock, NULL) != 0) ||
-    (pthread_mutex_init(&client->send_lock, NULL) != 0)
-  )
+  if (pthread_mutex_init(&client->lock, NULL) != 0)
   {
     LIBWSCLIENT_ON_ERROR(
-      client, "Unable to init mutex or send lock in libwsclient_new.\n"
+      client, "Unable to init mutex lock in libwsclient_new.\n"
     );
-    free(client);
-    return NULL;
+    goto fail;
+  }
+  if (pthread_mutex_init(&client->send_lock, NULL) != 0)
+  {
+    LIBWSCLIENT_ON_ERROR(
+      client, "Unable to init mutex send lock in libwsclient_new.\n"
+    );
+    pthread_mutex_destroy(&client->lock);
+    goto fail;
   }
   update_wsclient_status(client, FLAG_CLIENT_CONNECTING, 0);
-  client->URI = (char *)calloc(strlen(URI) + 1, 1);
+  client->URI = strdup(URI);
   if (!client->URI)
   {
     LIBWSCLIENT_ON_ERROR(
       client, "Unable to allocate memory in libwsclient_new.\n"
     );
-    free(client);
-    return NULL;
+    goto clean_up;
   }
-  strncpy(client->URI, URI, strlen(URI));
+
   client->as_thread = as_thread;
 
   if (client->as_thread)
@@ -59,15 +62,25 @@ wsclient *libwsclient_new(const char *URI, int as_thread)
     )
     {
       LIBWSCLIENT_ON_ERROR(client, "Unable to create handshake thread.\n");
-      free(client);
-      return NULL;
+      free(client->URI);
+      client->URI = NULL;
+      goto clean_up;
     }
   }
   return client;
+
+clean_up:
+  pthread_mutex_destroy(&client->lock);
+  pthread_mutex_destroy(&client->send_lock);
+
+fail:
+  free(client);
+  return NULL;
 }
 
 void libwsclient_start_run(wsclient *c)
 {
+  if (!c) return;
   if (TEST_FLAG(c, FLAG_CLIENT_CONNECTING))
   {
     if (c->as_thread)
@@ -88,7 +101,10 @@ void libwsclient_start_run(wsclient *c)
   {
     if (c->as_thread)
     {
-      pthread_create(&c->run_thread, NULL, libwsclient_run_thread, (void *)c);
+      if (pthread_create(&c->run_thread, NULL, libwsclient_run_thread, (void *)c))
+      {
+        LIBWSCLIENT_ON_ERROR(c, "create thread run failed.\n");
+      }
     }
     else
     {
@@ -103,6 +119,7 @@ void libwsclient_start_run(wsclient *c)
 
 void libwsclient_wait_for_end(wsclient *client)
 {
+  if (!client) return;
   if (client->run_thread)
   {
     pthread_join(client->run_thread, NULL);
@@ -111,6 +128,7 @@ void libwsclient_wait_for_end(wsclient *client)
 
 void libwsclient_close(wsclient *client, char *reason)
 {
+  if (!client) return;
   if (!TEST_FLAG(client, FLAG_CLIENT_CLOSEING))
   {
     libwsclient_send_data(
@@ -142,11 +160,13 @@ void libwsclient_close(wsclient *client, char *reason)
 
 void libwsclient_stop(wsclient *c)
 {
+  if (!c) return;
   update_wsclient_status(c, FLAG_CLIENT_QUIT, 0);
 }
 
 void libwsclient_send_string(wsclient *client, char *payload)
 {
+  if (!client) return;
   #ifdef DEBUG
   char buff[1024] = {0};
   sprintf(buff, "websocket sending data message: %s", payload);
@@ -172,6 +192,8 @@ void libwsclient_send_data(
   int mask_int = 0;
 
   struct timeval tv;
+
+  if (!client) return;
   gettimeofday(&tv, NULL);
   srand(tv.tv_usec * tv.tv_sec);
   mask_int = rand();
