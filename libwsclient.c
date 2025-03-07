@@ -143,16 +143,13 @@ void libwsclient_close(wsclient *client, char *reason)
   pthread_mutex_destroy(&client->send_lock);
   if (TEST_FLAG(client, FLAG_CLIENT_IS_SSL))
   {
-    #ifdef HAVE_OPENSSL
-    if (client->ssl)
-    {
-      SSL_shutdown(client->ssl);
-      SSL_free(client->ssl);
-    }
-    if (client->ssl_ctx)
-    {
-      SSL_CTX_free(client->ssl_ctx);
-    }
+    #ifdef HAVE_MBEDTLS
+    mbedtls_ssl_close_notify(&client->ssl);
+    mbedtls_net_free(&client->net);
+    mbedtls_ssl_free(&client->ssl);
+    mbedtls_ssl_config_free(&client->conf);
+    mbedtls_ctr_drbg_free(&client->ctr_drbg);
+    mbedtls_entropy_free(&client->entropy);
     #endif
   }
   free(client);
@@ -176,7 +173,10 @@ void libwsclient_send_string(wsclient *client, char *payload)
   }
   #endif
 
-  libwsclient_send_data(client, OP_CODE_TYPE_TEXT, (unsigned char *)payload, payload ? strlen(payload) : 0);
+  libwsclient_send_data(
+    client, OP_CODE_TYPE_TEXT, (unsigned char *)payload,
+    payload ? strlen(payload) : 0
+  );
 }
 
 // Sending data

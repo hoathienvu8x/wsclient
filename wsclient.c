@@ -19,13 +19,28 @@
 #include "sha1.h"
 #include "utils.h"
 
+#ifdef HAVE_MBEDTLS
+void mbedtls_set_fd(mbedtls_net_context *net, int fd) {
+  net->fd = fd;
+}
+#endif
+
 void * libwsclient_run_periodic(void * ptr)
 {
   wsclient *c = (wsclient *)ptr;
   if (!c) return NULL;
+  if (TEST_FLAG(c, (FLAG_CLIENT_CLOSEING | FLAG_CLIENT_QUIT))) {
+    return NULL;
+  }
   for (;;)
   {
     usleep(c->interval);
+    if (TEST_FLAG(c, FLAG_CLIENT_QUIT))
+      break;
+
+    if (TEST_FLAG(c, FLAG_CLIENT_CONNECTING))
+      continue;
+
     c->onperiodic(c);
   }
   return NULL;
@@ -112,6 +127,8 @@ void *libwsclient_run_thread(void *ptr)
   {
     LIBWSCLIENT_ON_ERROR(c, "Error receiving data in client run thread");
   }
+
+  libwsclient_send_data(c, OP_CODE_CONTROL_CLOSE, NULL, 0);
 
   if (c->onclose)
   {
@@ -378,18 +395,55 @@ void *libwsclient_handshake_thread(void *ptr)
 
   if (TEST_FLAG(client, FLAG_CLIENT_IS_SSL))
   {
-    #ifdef HAVE_OPENSSL
-    static bool b_ssl_need_inited = true;
-    if (b_ssl_need_inited)
-    {
-      SSL_library_init();
-      SSL_load_error_strings();
-      b_ssl_need_inited = false;
+    #ifdef HAVE_MBEDTLS
+    mbedtls_net_init(&client->net);
+    mbedtls_ssl_init(&client->ssl);
+    mbedtls_ssl_config_init(&client->conf);
+    mbedtls_ctr_drbg_init(&client->ctr_drbg);
+    mbedtls_entropy_init(&client->entropy);
+
+    mbedtls_set_fd(&client->net, sockfd);
+
+    if (mbedtls_ctr_drbg_seed(
+      &client->ctr_drbg, mbedtls_entropy_func, &client->entropy, NULL, 0
+    )) {
+      return NULL;
     }
-    client->ssl_ctx = SSL_CTX_new(SSLv23_method());
-    client->ssl = SSL_new(client->ssl_ctx);
-    SSL_set_fd(client->ssl, sockfd);
-    SSL_connect(client->ssl);
+    if (mbedtls_ssl_config_defaults(
+      &client->conf, MBEDTLS_SSL_IS_CLIENT,
+      MBEDTLS_SSL_TRANSPORT_STREAM,
+      MBEDTLS_SSL_PRESET_DEFAULT
+    )) {
+      return NULL;
+    }
+
+    mbedtls_ssl_conf_authmode(&client->conf, MBEDTLS_SSL_VERIFY_NONE);
+    mbedtls_ssl_conf_rng(
+      &client->conf, mbedtls_ctr_drbg_random, &client->ctr_drbg
+    );
+
+    if (mbedtls_ssl_setup(&client->ssl, &client->conf)) {
+      return NULL;
+    }
+
+    if (mbedtls_ssl_set_hostname(&client->ssl, host)) {
+      return NULL;
+    }
+
+    mbedtls_ssl_set_bio(
+      &client->ssl, &client->net, mbedtls_net_send, mbedtls_net_recv, 0
+    );
+
+    int ret;
+    do {
+      ret = mbedtls_ssl_handshake(&client->ssl);
+    } while (ret == MBEDTLS_ERR_SSL_WANT_READ || ret == MBEDTLS_ERR_SSL_WANT_WRITE);
+
+    if (ret) return NULL;
+
+    if (mbedtls_ssl_get_verify_result(&client->ssl)) {
+      return NULL;
+    }
     #else
     LIBWSCLIENT_ON_ERROR(client, "Error while setting ssl");
     return NULL;
@@ -564,9 +618,9 @@ size_t _libwsclient_read(wsclient *c, void *buf, size_t length)
         #ifdef DEBUG
         sp = "ssl";
         #endif
-        #ifdef HAVE_OPENSSL
-        ret = (ssize_t)SSL_read(
-          c->ssl, (unsigned char *)c->buf.data, sizeof(c->buf.data)
+        #ifdef HAVE_MBEDTLS
+        ret = (ssize_t)mbedtls_ssl_read(
+          &c->ssl, (unsigned char *)c->buf.data, sizeof(c->buf.data)
         );
         #endif
       }
@@ -608,8 +662,10 @@ size_t _libwsclient_write(wsclient *c, const void *buf, size_t length)
     #ifdef DEBUG
     sp = "ssl";
     #endif
-    #ifdef HAVE_OPENSSL
-    len = (ssize_t) SSL_write(c->ssl, buf, length);
+    #ifdef HAVE_MBEDTLS
+    len = (ssize_t)mbedtls_ssl_write(
+      &c->ssl, (const unsigned char *)buf, length
+    );
     #endif
   }
   else

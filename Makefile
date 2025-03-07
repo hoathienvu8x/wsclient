@@ -8,8 +8,8 @@ MODCFLAGS = -Wall -Wextra -pedantic --std=gnu99
 
 INCLUDE= -I. -I./include -lpthread
 
-ifdef openssl
-	INCLUDE += -lssl -lcrypto -DHAVE_OPENSSL
+ifdef mbedtls
+	INCLUDE += -lmbedtls -lmbedx509 -lmbedcrypto -DHAVE_MBEDTLS
 endif
  
 CC = gcc
