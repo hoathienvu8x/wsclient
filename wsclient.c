@@ -485,23 +485,23 @@ void *libwsclient_handshake_thread(void *ptr)
 
   if (strcmp(port, "80") != 0 && strcmp(port, "443") != 0)
   {
-    snprintf(request_host, 256, "%s:%s", host, port);
+    snprintf(request_host, sizeof(request_host), "%s:%s", host, port);
   }
   else
   {
-    snprintf(request_host, 256, "%s", host);
+    snprintf(request_host, sizeof(request_host), "%s", host);
   }
   char request_headers[1024] = {0};
   if (client->origin) {
     snprintf(
-      request_headers, 1024, "GET %s HTTP/1.1\r\nUpgrade: websocket\r\n"
+      request_headers, sizeof(request_headers), "GET %s HTTP/1.1\r\nUpgrade: websocket\r\n"
       "Connection: Upgrade\r\nHost: %s\r\nOrigin: %s\r\nSec-WebSocket-Key: %s\r\n"
       "Sec-WebSocket-Version: 13\r\n\r\n", path, request_host, client->origin,
       websocket_key
     );
   } else {
     snprintf(
-      request_headers, 1024, "GET %s HTTP/1.1\r\nUpgrade: websocket\r\n"
+      request_headers, sizeof(request_headers), "GET %s HTTP/1.1\r\nUpgrade: websocket\r\n"
       "Connection: Upgrade\r\nHost: %s\r\nSec-WebSocket-Key: %s\r\n"
       "Sec-WebSocket-Version: 13\r\n\r\n", path, request_host, websocket_key
     );
@@ -538,11 +538,11 @@ void *libwsclient_handshake_thread(void *ptr)
   strncpy(rcv, recv_buf, strlen(recv_buf));
 
   char pre_encode[512] = {0};
-  snprintf(pre_encode, 256, "%s%s", websocket_key, UUID);
+  snprintf(pre_encode, sizeof(pre_encode), "%s%s", websocket_key, UUID);
   SHA1Reset(&shactx);
   SHA1Input(&shactx, (unsigned char*)pre_encode, strlen(pre_encode));
   SHA1Result(&shactx);
-  memset(pre_encode, 0, 256);
+  memset(pre_encode, 0, sizeof(pre_encode));
   snprintf(
     pre_encode, sizeof(pre_encode) - 1, "%08x%08x%08x%08x%08x", shactx.Message_Digest[0],
     shactx.Message_Digest[1], shactx.Message_Digest[2],
