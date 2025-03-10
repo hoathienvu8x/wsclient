@@ -64,6 +64,7 @@ typedef struct _wsclient
   pthread_mutex_t send_lock;
   int interval;
   char *URI;
+  char *origin;
   int sockfd;
   int flags;
   void (*onopen)(struct _wsclient *);
@@ -87,7 +88,7 @@ typedef struct _wsclient
 
 // Function defs
 
-wsclient *libwsclient_new(const char *URI, int as_thread);
+wsclient *libwsclient_new(const char *URI, const char *origin, int as_thread);
 
 void libwsclient_start_run(wsclient *c);
 

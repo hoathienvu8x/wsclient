@@ -483,7 +483,7 @@ void *libwsclient_handshake_thread(void *ptr)
   }
   base64_encode(key_nonce, 16, websocket_key, 256);
 
-  if (strcmp(port, "80") != 0)
+  if (strcmp(port, "80") != 0 && strcmp(port, "443") != 0)
   {
     snprintf(request_host, 256, "%s:%s", host, port);
   }
@@ -492,11 +492,20 @@ void *libwsclient_handshake_thread(void *ptr)
     snprintf(request_host, 256, "%s", host);
   }
   char request_headers[1024] = {0};
-  snprintf(
-    request_headers, 1024, "GET %s HTTP/1.1\r\nUpgrade: websocket\r\n"
-    "Connection: Upgrade\r\nHost: %s\r\nSec-WebSocket-Key: %s\r\n"
-    "Sec-WebSocket-Version: 13\r\n\r\n", path, request_host, websocket_key
-  );
+  if (client->origin) {
+    snprintf(
+      request_headers, 1024, "GET %s HTTP/1.1\r\nUpgrade: websocket\r\n"
+      "Connection: Upgrade\r\nHost: %s\r\nOrigin: %s\r\nSec-WebSocket-Key: %s\r\n"
+      "Sec-WebSocket-Version: 13\r\n\r\n", path, request_host, client->origin,
+      websocket_key
+    );
+  } else {
+    snprintf(
+      request_headers, 1024, "GET %s HTTP/1.1\r\nUpgrade: websocket\r\n"
+      "Connection: Upgrade\r\nHost: %s\r\nSec-WebSocket-Key: %s\r\n"
+      "Sec-WebSocket-Version: 13\r\n\r\n", path, request_host, websocket_key
+    );
+  }
   n = _libwsclient_write(client, request_headers, strlen(request_headers));
   z = 0;
   memset(recv_buf, 0, sizeof(recv_buf));

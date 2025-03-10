@@ -16,7 +16,7 @@
 
 #define MAX_PAYLOAD_PAD (MAX_PAYLOAD_SIZE - 15)
 
-wsclient *libwsclient_new(const char *URI, int as_thread)
+wsclient *libwsclient_new(const char *URI, const char *origin, int as_thread)
 {
   wsclient *client = NULL;
 
@@ -49,6 +49,10 @@ wsclient *libwsclient_new(const char *URI, int as_thread)
       client, "Unable to allocate memory in libwsclient_new.\n"
     );
     goto clean_up;
+  }
+
+  if (origin && strlen(origin) > 0) {
+    client->origin = strdup(origin);
   }
 
   if (as_thread)
@@ -98,6 +102,9 @@ void libwsclient_start_run(wsclient *c)
 
     free(c->URI);
     c->URI = NULL;
+
+    free(c->origin);
+    c->origin = NULL;
   }
   if (c->sockfd)
   {
