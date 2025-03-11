@@ -88,7 +88,8 @@ typedef struct _wsclient
 
 // Function defs
 
-wsclient *libwsclient_new(const char *URI, const char *origin, int as_thread);
+wsclient *libwsclient_new(const char *URI, int as_thread);
+wsclient *libwsclient_new_with_origin(const char *URI, const char *origin, int as_thread);
 
 void libwsclient_start_run(wsclient *c);
 

@@ -16,7 +16,10 @@
 
 #define MAX_PAYLOAD_PAD (MAX_PAYLOAD_SIZE - 15)
 
-wsclient *libwsclient_new(const char *URI, const char *origin, int as_thread)
+wsclient *libwsclient_new(const char *URI, int as_thread) {
+  return libwsclient_new_with_origin(URI, NULL, as_thread);
+}
+wsclient *libwsclient_new_with_origin(const char *URI, const char *origin, int as_thread)
 {
   wsclient *client = NULL;
 
