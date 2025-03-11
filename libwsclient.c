@@ -20,6 +20,8 @@ wsclient *libwsclient_new(const char *URI, const char *origin, int as_thread)
 {
   wsclient *client = NULL;
 
+  if (!URI) return NULL;
+
   client = (wsclient *)calloc(sizeof(wsclient), 1);
   if (!client)
   {
