@@ -26,7 +26,7 @@ void mbedtls_set_fd(mbedtls_net_context *net, int fd) {
 #endif
 
 // https://stackoverflow.com/a/58658526
-void nsleep(long msec)
+static void libwsclient_nsleep(long msec)
 {
   struct timespec ts, rs;
   int rc = -1;
@@ -67,7 +67,7 @@ void * libwsclient_run_periodic(void * ptr)
   if (!(*c->onperiodic) || c->interval <= 0) return NULL;
   for (;;)
   {
-    nsleep(c->interval);
+    libwsclient_nsleep(c->interval);
     if (TEST_FLAG(c, (FLAG_CLIENT_CLOSEING | FLAG_CLIENT_QUIT)))
       break;
 
