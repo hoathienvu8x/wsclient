@@ -332,7 +332,6 @@ void *libwsclient_handshake_thread(void *ptr)
 {
   wsclient *client = (wsclient *)ptr;
   if (!client) return NULL;
-  const char *URI = client->URI;
   SHA1Context shactx;
   const char *UUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
   unsigned char sha1bytes[20] = {0};
@@ -346,14 +345,12 @@ void *libwsclient_handshake_thread(void *ptr)
   char recv_buf[1024];
   char *URI_copy = NULL, *p = NULL, *rcv = NULL, *tok = NULL;
   int i, sockfd, n, flags = 0;
-  URI_copy = (char *)malloc(strlen(URI) + 1);
+  URI_copy = strdup(client->URI);
   if (!URI_copy)
   {
     LIBWSCLIENT_ON_ERROR(client, "Unable to allocate memory in libwsclient_new.\n");
     return NULL;
   }
-  memset(URI_copy, 0, strlen(URI) + 1);
-  strncpy(URI_copy, URI, strlen(URI));
   p = strstr(URI_copy, "://");
   if (p == NULL)
   {
@@ -514,7 +511,7 @@ void *libwsclient_handshake_thread(void *ptr)
   do
   {
     n = _libwsclient_read(client, recv_buf + z, 1);
-    z += n;
+    if (n > 0 ) z += n;
     if (z > sizeof(recv_buf)) {
       LIBWSCLIENT_ON_ERROR(client, "Recv header is to lagre");
       return NULL;
@@ -529,13 +526,13 @@ void *libwsclient_handshake_thread(void *ptr)
   }
 
   // parse recv_buf for response headers and assure Accept matches expected value
-  rcv = (char *)calloc(strlen(recv_buf) + 1, 1);
+  rcv = (char *)calloc(z + 1, 1);
   if (!rcv)
   {
     LIBWSCLIENT_ON_ERROR(client, "Unable to allocate memory in libwsclient_new.\n");
     return NULL;
   }
-  strncpy(rcv, recv_buf, strlen(recv_buf));
+  strncpy(rcv, recv_buf, z);
 
   char pre_encode[512] = {0};
   snprintf(pre_encode, sizeof(pre_encode), "%s%s", websocket_key, UUID);
