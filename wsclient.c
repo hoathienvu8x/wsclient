@@ -298,7 +298,7 @@ int libwsclient_open_connection(const char *host, const char *port)
 {
   if (!port || strlen(port) == 0) return 0;
   struct addrinfo hints, *servinfo, *p;
-  int rv, sockfd;
+  int rv = -1, sockfd = -1;
   memset(&hints, 0, sizeof(hints));
   hints.ai_family = AF_UNSPEC;
   hints.ai_socktype = SOCK_STREAM;
